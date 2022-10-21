@@ -43,7 +43,6 @@ contract Lending is ReentrancyGuard, Ownable {
 
     modifier moreThanZero(uint256 amount) {
         require(amount > 0, "needs more than zero");
-
         _;
     }
 }
