@@ -19,9 +19,17 @@ contract Lending is ReentrancyGuard, Ownable {
     // At 80% Loan to Value Ratio, the loan can be liquidated
     uint256 public constant LIQUIDATION_THRESHOLD = 80;
     uint256 public constant MIN_HEALH_FACTOR = 1e18;
+    event Deposit(address indexed account, address indexed token, uint256 indexed amount);
 
-    function deposit(add token, uint256 amount) external isAllowedToken(token),moreThanZero(amount) {
-        emit Depoit(msg.sender,token,amount);
+    function deposit(address token, uint256 amount)
+        external
+        isAllowedToken(token)
+        moreThanZero(amount)
+    {
+        emit Deposit(msg.sender, token, amount);
+        s_accountToTokenDeposits[msg.sender][token] += amount;
+        bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
+        require(success, "deposit failed");
     }
 
     /********************/
@@ -29,14 +37,13 @@ contract Lending is ReentrancyGuard, Ownable {
     /********************/
 
     modifier isAllowedToken(address token) {
-        if (s_tokenToPriceFeed[token] == address(0)) revert TokenNotAllowed(token);
+        require(s_tokenToPriceFeed[token] != address(0), "token not allowed");
         _;
     }
 
     modifier moreThanZero(uint256 amount) {
-        if (amount == 0) {
-            revert NeedsMoreThanZero();
-        }
+        require(amount > 0, "needs more than zero");
+
         _;
     }
 }
