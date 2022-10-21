@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Lending {
+contract Lending is ReentrancyGuard, Ownable {
     mapping(address => address) public s_tokenToPriceFeed;
     address[] public s_allowedTokens;
     // Account -> Token -> Amount
@@ -20,5 +20,23 @@ contract Lending {
     uint256 public constant LIQUIDATION_THRESHOLD = 80;
     uint256 public constant MIN_HEALH_FACTOR = 1e18;
 
-    constructor() {}
+    function deposit(add token, uint256 amount) external isAllowedToken(token),moreThanZero(amount) {
+        emit Depoit(msg.sender,token,amount);
+    }
+
+    /********************/
+    /* Modifiers */
+    /********************/
+
+    modifier isAllowedToken(address token) {
+        if (s_tokenToPriceFeed[token] == address(0)) revert TokenNotAllowed(token);
+        _;
+    }
+
+    modifier moreThanZero(uint256 amount) {
+        if (amount == 0) {
+            revert NeedsMoreThanZero();
+        }
+        _;
+    }
 }
