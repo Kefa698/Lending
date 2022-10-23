@@ -1,10 +1,15 @@
-// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+// SPDX-License-Identifier: MIT
+// This contract is not audited!!!
 pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+error TransferFailed();
+error TokenNotAllowed(address token);
+error NeedsMoreThanZero();
 
 contract Lending is ReentrancyGuard, Ownable {
     mapping(address => address) public s_tokenToPriceFeed;
@@ -35,6 +40,7 @@ contract Lending is ReentrancyGuard, Ownable {
 
     function deposit(address token, uint256 amount)
         external
+        nonReentrant
         isAllowedToken(token)
         moreThanZero(amount)
     {
@@ -45,10 +51,10 @@ contract Lending is ReentrancyGuard, Ownable {
     }
 
     function withdraw(address token, uint256 amount) external nonReentrant moreThanZero(amount) {
-        require(s_accountToTokenDeposits[msg.sender][token] >= amount, "not enough funds");
+        require(s_accountToTokenDeposits[msg.sender][token] >= amount, "not eneogh funds");
         emit Withdraw(msg.sender, token, amount);
         _pullFunds(msg.sender, token, amount);
-        require(healthfactor(msg.sender) >= MIN_HEALH_FACTOR, "Platform will go insolvent!");
+        require(healthFactor(msg.sender) >= MIN_HEALH_FACTOR, "platform will go insolvent");
     }
 
     function _pullFunds(
@@ -56,43 +62,15 @@ contract Lending is ReentrancyGuard, Ownable {
         address token,
         uint256 amount
     ) private {
-        require(s_accountToTokenDeposits[account][token] >= amount, "not eneogh funds");
+        require(s_accountToTokenDeposits[account][token] >= amount, "not eneogh funds to withdraw");
+        s_accountToTokenDeposits[account][token] -= amount;
         bool success = IERC20(token).transfer(msg.sender, amount);
         require(success, "transfer failed");
     }
 
-    function borrow(address token, uint256 amount)
-        external
-        nonReentrant
-        isAllowedToken(token)
-        moreThanZero(amount)
-    {
-        require(IERC20(token).balanceOf(address(this)) >= amount, "not eneogh funds to borrow");
-        s_accountToTokenBorrows[msg.sender][token] += amount;
-        emit Borrow(msg.sender, token, amount);
-        bool success = IERC20(token).transfer(msg.sender, amount);
-        require(success, "failed to borrow");
-        require(healthfactor(msg.sender) >= MIN_HEALH_FACTOR, "platform will go insolvent");
-    }
+    function borrow() external {}
 
-    function liquidate(
-        address account,
-        address repayToken,
-        address rewardToken
-    ) external {
-        require(healthfactor(account) < MIN_HEALH_FACTOR, "account acnt be liquidated");
-        uint256 halfDebt = s_accountToTokenBorrows[account][repayToken] / 2;
-        uint256 halfDebtInEth = getEthValue(repayToken, halfDebt);
-        require(halfDebtInEth > 0, "choose a different repayToken");
-        uint256 rewardAmountInEth = (halfDebtInEth * LIQUIDATION_REWARD) / 100;
-        uint256 totalRewardAmountInRewardToken = getTokenValueFromEth(
-            rewardToken,
-            rewardAmountInEth + halfDebtInEth
-        );
-        emit Liquidate(account, repayToken, rewardToken, halfDebtInEth, msg.sender);
-        _repay(account, repayToken, halfDebt);
-        _pullFunds(account, rewardToken, totalRewardAmountInRewardToken);
-    }
+    function liquidate() external {}
 
     function repay(address token, uint256 amount)
         external
@@ -109,51 +87,47 @@ contract Lending is ReentrancyGuard, Ownable {
         address token,
         uint256 amount
     ) private {
-        s_accountToTokenBorrows[account][token]-=amount;
-        bool success=IERC20(token).transferFrom(msg.sender,address(this),amount);
-        require(success,"repayment failed");
+        // require(s_accountToTokenBorrows[account][token] - amount >= 0, "Repayed too much!");
+        // On 0.8+ of solidity, it auto reverts math that would drop below 0 for a uint256
+        s_accountToTokenBorrows[account][token] -= amount;
+        bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
+        require(success, "transfer failed");
     }
 
     function getAccountInformation(address user)
         public
         view
-        returns (uint256 borrowedValueInETH, uint256 collateralValueInETH)
+        returns (uint256 borrowedValueInEth, uint256 collateralValueInEth)
     {
-        borrowedValueInETH = getAccountBorrowedValue(user);
-        collateralValueInETH = getAccountCollateralValue(user);
+        borrowedValueInEth = getAccountBorrowedValue(user);
+        collateralValueInEth = getAccountCollateralValue(user);
     }
 
     function getAccountCollateralValue(address user) public view returns (uint256) {
-        uint256 totalCollateralValueInETH = 0;
-        for (uint256 index = 0; index < s_allowedTokens.length; index++) {
-            address token = s_allowedTokens[index];
+        uint256 totalCollateralValueInEth = 0;
+        for (uint256 i = 0; i < s_allowedTokens.length; i++) {
+            address token = s_allowedTokens[i];
             uint256 amount = s_accountToTokenDeposits[user][token];
             uint256 valueInEth = getEthValue(token, amount);
-            totalCollateralValueInETH += valueInEth;
+            totalCollateralValueInEth += valueInEth;
         }
-        return totalCollateralValueInETH;
+        return totalCollateralValueInEth;
     }
 
     function getAccountBorrowedValue(address user) public view returns (uint256) {
-        uint256 totalBorrowsValueInETH = 0;
-        for (uint256 index = 0; index < s_allowedTokens.length; index++) {
-            address token = s_allowedTokens[index];
+        uint256 totalBorrowsInEth;
+        for (uint256 i = 0; i < s_allowedTokens.length; i++) {
+            address token = s_allowedTokens[i];
             uint256 amount = s_accountToTokenBorrows[user][token];
             uint256 valueInEth = getEthValue(token, amount);
-            totalBorrowsValueInETH += valueInEth;
+            totalBorrowsInEth += valueInEth;
         }
-        return totalBorrowsValueInETH;
+        return totalBorrowsInEth;
     }
 
     function getEthValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokenToPriceFeed[token]);
         (, int256 price, , , ) = priceFeed.latestRoundData();
-        // 2000 DAI = 1 ETH
-        // 0.002 ETH per DAI
-        // price will be something like 20000000000000000
-        // So we multiply the price by the amount, and then divide by 1e18
-        // 2000 DAI * (0.002 ETH / 1 DAI) = 0.002 ETH
-        // (2000 * 10 ** 18) * ((0.002 * 10 ** 18) / 10 ** 18) = 0.002 ETH
         return (uint256(price) * amount) / 1e18;
     }
 
@@ -163,12 +137,12 @@ contract Lending is ReentrancyGuard, Ownable {
         return (amount * 1e18) / uint256(price);
     }
 
-    function healthfactor(address account) public view returns (uint256) {
+    function healthFactor(address account) public view returns (uint256) {
         (uint256 borrowedValueInEth, uint256 collateralValueInEth) = getAccountInformation(account);
-        uint256 collateralAdjustedForThreshold = (collateralValueInEth * LIQUIDATION_THRESHOLD) /
-            100;
+        uint256 collateralAdjustedThreshold = ((collateralValueInEth * LIQUIDATION_THRESHOLD) /
+            100);
         if (borrowedValueInEth == 0) return 100e18;
-        return (collateralAdjustedForThreshold * 1e18) / borrowedValueInEth;
+        return (collateralAdjustedThreshold * 1e18) / borrowedValueInEth;
     }
 
     /********************/
@@ -176,12 +150,39 @@ contract Lending is ReentrancyGuard, Ownable {
     /********************/
 
     modifier isAllowedToken(address token) {
-        require(s_tokenToPriceFeed[token] != address(0), "token not allowed");
+        if (s_tokenToPriceFeed[token] == address(0)) revert TokenNotAllowed(token);
         _;
     }
 
     modifier moreThanZero(uint256 amount) {
-        require(amount > 0, "needs more than zero");
+        if (amount == 0) {
+            revert NeedsMoreThanZero();
+        }
         _;
     }
+
+    /********************/
+    /* DAO / OnlyOwner Functions */
+    /********************/
+    function setAllowedToken(address token, address priceFeed) external onlyOwner {
+        bool foundToken = false;
+        uint256 allowedTokensLength = s_allowedTokens.length;
+        for (uint256 index = 0; index < allowedTokensLength; index++) {
+            if (s_allowedTokens[index] == token) {
+                foundToken = true;
+                break;
+            }
+        }
+        if (!foundToken) {
+            s_allowedTokens.push(token);
+        }
+        s_tokenToPriceFeed[token] = priceFeed;
+        emit AllowedTokenSet(token, priceFeed);
+    }
+
+    /********************/
+    /* Getter Functions */
+    /********************/
+    // Ideally, we'd have getter functions for all our s_ variables we want exposed, and set them all to private.
+    // But, for the purpose of this demo, we've left them public for simplicity.
 }
