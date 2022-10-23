@@ -68,7 +68,19 @@ contract Lending is ReentrancyGuard, Ownable {
         require(success, "transfer failed");
     }
 
-    function borrow() external {}
+    function borrow(address token, uint256 amount)
+        external
+        nonReentrant
+        isAllowedToken(token)
+        moreThanZero(amount)
+    {
+        require(IERC20(token).balanceOf(address(this)) >= amount, "not eneogh funds to borrow");
+        s_accountToTokenBorrows[msg.sender][token] += amount;
+        emit Borrow(msg.sender, token, amount);
+        bool success = IERC20(token).transfer(msg.sender, amount);
+        require(success, "failed");
+        require(healthFactor(msg.sender) >= MIN_HEALH_FACTOR, "platform will go insolvent");
+    }
 
     function liquidate() external {}
 
