@@ -45,16 +45,25 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   // 1 DAI = $1 & ETH = $1,000
                   const oneDaiOfEth = ethers.utils.parseEther("0.001")
                   const DaiValueOfEth = await lending.getTokenValueFromEth(dai.address, oneDaiOfEth)
-                  assert.equal(DaiValueOfEth.toString(), await ethers.utils.parseEther("1").toString())
+                  assert.equal(
+                      DaiValueOfEth.toString(),
+                      await ethers.utils.parseEther("1").toString()
+                  )
               })
               it("correctly gets wbtc price", async function () {
-                //1 WBTC = $2,000 & ETH = $1,000
-                const oneWbtcOfEth = ethers.utils.parseEther("2")
-                const WbtcValueOfEth = await lending.getTokenValueFromEth(wbtc.address, oneWbtcOfEth)
-                assert.equal(WbtcValueOfEth.toString(), await ethers.utils.parseEther("1").toString())
-            })
+                  //1 WBTC = $2,000 & ETH = $1,000
+                  const oneWbtcOfEth = ethers.utils.parseEther("2")
+                  const WbtcValueOfEth = await lending.getTokenValueFromEth(
+                      wbtc.address,
+                      oneWbtcOfEth
+                  )
+                  assert.equal(
+                      WbtcValueOfEth.toString(),
+                      await ethers.utils.parseEther("1").toString()
+                  )
+              })
           })
-          describe("Deposit",function(){
+          describe("Deposit", function () {
               it("Deposits money", async function () {
                   await wbtc.approve(lending.address, depositAmount)
                   await lending.deposit(wbtc.address, depositAmount)
@@ -62,8 +71,11 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   assert.equal(accountInfo[0].toString(), "0")
                   // WBTC is 2x the price of ETH in our scenario, so we should see that value reflected
                   assert.equal(accountInfo[1].toString(), depositAmount.mul(2).toString())
-                  const healthFactor = await lending.healthFactor(deployer.address)
-                  assert.equal(healthFactor.toString(), ethers.utils.parseEther("100").toString())
+                  const healthfactor = await lending.healthFactor(deployer.address)
+                  assert.equal(
+                      healthfactor.toString(),
+                      await ethers.utils.parseEther("100").toString()
+                  )
               })
               it("Doesn't allow unallowed tokens", async function () {
                   await randomToken.approve(lending.address, depositAmount)
