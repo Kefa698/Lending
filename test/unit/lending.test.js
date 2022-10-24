@@ -54,4 +54,22 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                 assert.equal(WbtcValueOfEth.toString(), await ethers.utils.parseEther("1").toString())
             })
           })
+          describe("Deposit",function(){
+              it("Deposits money", async function () {
+                  await wbtc.approve(lending.address, depositAmount)
+                  await lending.deposit(wbtc.address, depositAmount)
+                  const accountInfo = await lending.getAccountInformation(deployer.address)
+                  assert.equal(accountInfo[0].toString(), "0")
+                  // WBTC is 2x the price of ETH in our scenario, so we should see that value reflected
+                  assert.equal(accountInfo[1].toString(), depositAmount.mul(2).toString())
+                  const healthFactor = await lending.healthFactor(deployer.address)
+                  assert.equal(healthFactor.toString(), ethers.utils.parseEther("100").toString())
+              })
+              it("Doesn't allow unallowed tokens", async function () {
+                  await randomToken.approve(lending.address, depositAmount)
+                  await expect(
+                      lending.deposit(randomToken.address, depositAmount)
+                  ).to.be.revertedWith("TokenNotAllowed")
+              })
+          })
       })
