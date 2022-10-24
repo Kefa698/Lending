@@ -34,7 +34,7 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   assert.equal(ethValueOfDai.toString(), ethers.utils.parseEther("1").toString())
               })
               it("Correctly gets WBTC price", async function () {
-                  // 1 WBTC = $2,000 & ETH = $1,0000
+                  // 1 WBTC = $2,000 & ETH = $1,000
                   const oneEthOfWbtc = ethers.utils.parseEther("0.5")
                   const ethValueOfWbtc = await lending.getEthValue(wbtc.address, oneEthOfWbtc)
                   assert.equal(ethValueOfWbtc.toString(), ethers.utils.parseEther("1").toString())
@@ -48,7 +48,7 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   assert.equal(DaiValueOfEth.toString(), await ethers.utils.parseEther("1").toString())
               })
               it("correctly gets wbtc price", async function () {
-                //1 WBTC = $2,000 & ETH = $1,0000
+                //1 WBTC = $2,000 & ETH = $1,000
                 const oneWbtcOfEth = ethers.utils.parseEther("2")
                 const WbtcValueOfEth = await lending.getTokenValueFromEth(wbtc.address, oneWbtcOfEth)
                 assert.equal(WbtcValueOfEth.toString(), await ethers.utils.parseEther("1").toString())
