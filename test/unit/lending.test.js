@@ -35,9 +35,9 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
               })
               it("Correctly gets WBTC price", async function () {
                   // 1 WBTC = $2,000 & ETH = $1,000
-                  const oneEthOfWbtc = ethers.utils.parseEther("0.5")
+                  const oneEthOfWbtc = ethers.utils.parseEther("1")
                   const ethValueOfWbtc = await lending.getEthValue(wbtc.address, oneEthOfWbtc)
-                  assert.equal(ethValueOfWbtc.toString(), ethers.utils.parseEther("1").toString())
+                  assert.equal(ethValueOfWbtc.toString(), ethers.utils.parseEther("2").toString())
               })
           })
           describe("getTokenValueFromEth", function () {
