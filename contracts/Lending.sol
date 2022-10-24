@@ -47,14 +47,14 @@ contract Lending is ReentrancyGuard, Ownable {
         emit Deposit(msg.sender, token, amount);
         s_accountToTokenDeposits[msg.sender][token] += amount;
         bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        require(success, "deposit failed");
+        if (!success) revert TransferFailed();
     }
 
     function withdraw(address token, uint256 amount) external nonReentrant moreThanZero(amount) {
-        require(s_accountToTokenDeposits[msg.sender][token] >= amount, "not eneogh funds");
+        require(s_accountToTokenDeposits[msg.sender][token] >= amount, "Not enough funds");
         emit Withdraw(msg.sender, token, amount);
         _pullFunds(msg.sender, token, amount);
-        require(healthFactor(msg.sender) >= MIN_HEALH_FACTOR, "platform will go insolvent");
+        require(healthFactor(msg.sender) >= MIN_HEALH_FACTOR, "Platform will go insolvent!");
     }
 
     function _pullFunds(
@@ -62,10 +62,10 @@ contract Lending is ReentrancyGuard, Ownable {
         address token,
         uint256 amount
     ) private {
-        require(s_accountToTokenDeposits[account][token] >= amount, "not eneogh funds to withdraw");
+        require(s_accountToTokenDeposits[account][token] >= amount, "Not enough funds to withdraw");
         s_accountToTokenDeposits[account][token] -= amount;
         bool success = IERC20(token).transfer(msg.sender, amount);
-        require(success, "transfer failed");
+        if (!success) revert TransferFailed();
     }
 
     function borrow(address token, uint256 amount)
@@ -74,23 +74,23 @@ contract Lending is ReentrancyGuard, Ownable {
         isAllowedToken(token)
         moreThanZero(amount)
     {
-        require(IERC20(token).balanceOf(address(this)) >= amount, "not eneogh funds to borrow");
+        require(IERC20(token).balanceOf(address(this)) >= amount, "Not enough tokens to borrow");
         s_accountToTokenBorrows[msg.sender][token] += amount;
         emit Borrow(msg.sender, token, amount);
         bool success = IERC20(token).transfer(msg.sender, amount);
-        require(success, "failed");
-        require(healthFactor(msg.sender) >= MIN_HEALH_FACTOR, "platform will go insolvent");
+        if (!success) revert TransferFailed();
+        require(healthFactor(msg.sender) >= MIN_HEALH_FACTOR, "Platform will go insolvent!");
     }
 
     function liquidate(
         address account,
         address repayToken,
         address rewardToken
-    ) external {
-        require(healthFactor(account) < MIN_HEALH_FACTOR, "account cant be liquidated");
+    ) external nonReentrant {
+        require(healthFactor(account) < MIN_HEALH_FACTOR, "Account can't be liquidated!");
         uint256 halfDebt = s_accountToTokenBorrows[account][repayToken] / 2;
         uint256 halfDebtInEth = getEthValue(repayToken, halfDebt);
-        require(halfDebtInEth > 0, "choose a different repayToken");
+        require(halfDebtInEth > 0, "Choose a different repayToken!");
         uint256 rewardAmountInEth = (halfDebtInEth * LIQUIDATION_REWARD) / 100;
         uint256 totalRewardAmountInRewardToken = getTokenValueFromEth(
             rewardToken,
@@ -120,43 +120,49 @@ contract Lending is ReentrancyGuard, Ownable {
         // On 0.8+ of solidity, it auto reverts math that would drop below 0 for a uint256
         s_accountToTokenBorrows[account][token] -= amount;
         bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        require(success, "transfer failed");
+        if (!success) revert TransferFailed();
     }
 
     function getAccountInformation(address user)
         public
         view
-        returns (uint256 borrowedValueInEth, uint256 collateralValueInEth)
+        returns (uint256 borrowedValueInETH, uint256 collateralValueInETH)
     {
-        borrowedValueInEth = getAccountBorrowedValue(user);
-        collateralValueInEth = getAccountCollateralValue(user);
+        borrowedValueInETH = getAccountBorrowedValue(user);
+        collateralValueInETH = getAccountCollateralValue(user);
     }
 
     function getAccountCollateralValue(address user) public view returns (uint256) {
-        uint256 totalCollateralValueInEth = 0;
-        for (uint256 i = 0; i < s_allowedTokens.length; i++) {
-            address token = s_allowedTokens[i];
+        uint256 totalCollateralValueInETH = 0;
+        for (uint256 index = 0; index < s_allowedTokens.length; index++) {
+            address token = s_allowedTokens[index];
             uint256 amount = s_accountToTokenDeposits[user][token];
             uint256 valueInEth = getEthValue(token, amount);
-            totalCollateralValueInEth += valueInEth;
+            totalCollateralValueInETH += valueInEth;
         }
-        return totalCollateralValueInEth;
+        return totalCollateralValueInETH;
     }
 
     function getAccountBorrowedValue(address user) public view returns (uint256) {
-        uint256 totalBorrowsInEth;
-        for (uint256 i = 0; i < s_allowedTokens.length; i++) {
-            address token = s_allowedTokens[i];
+        uint256 totalBorrowsValueInETH = 0;
+        for (uint256 index = 0; index < s_allowedTokens.length; index++) {
+            address token = s_allowedTokens[index];
             uint256 amount = s_accountToTokenBorrows[user][token];
             uint256 valueInEth = getEthValue(token, amount);
-            totalBorrowsInEth += valueInEth;
+            totalBorrowsValueInETH += valueInEth;
         }
-        return totalBorrowsInEth;
+        return totalBorrowsValueInETH;
     }
 
     function getEthValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokenToPriceFeed[token]);
         (, int256 price, , , ) = priceFeed.latestRoundData();
+        // 2000 DAI = 1 ETH
+        // 0.002 ETH per DAI
+        // price will be something like 20000000000000000
+        // So we multiply the price by the amount, and then divide by 1e18
+        // 2000 DAI * (0.002 ETH / 1 DAI) = 0.002 ETH
+        // (2000 * 10 ** 18) * ((0.002 * 10 ** 18) / 10 ** 18) = 0.002 ETH
         return (uint256(price) * amount) / 1e18;
     }
 
@@ -168,10 +174,10 @@ contract Lending is ReentrancyGuard, Ownable {
 
     function healthFactor(address account) public view returns (uint256) {
         (uint256 borrowedValueInEth, uint256 collateralValueInEth) = getAccountInformation(account);
-        uint256 collateralAdjustedThreshold = ((collateralValueInEth * LIQUIDATION_THRESHOLD) /
-            100);
+        uint256 collateralAdjustedForThreshold = (collateralValueInEth * LIQUIDATION_THRESHOLD) /
+            100;
         if (borrowedValueInEth == 0) return 100e18;
-        return (collateralAdjustedThreshold * 1e18) / borrowedValueInEth;
+        return (collateralAdjustedForThreshold * 1e18) / borrowedValueInEth;
     }
 
     /********************/
