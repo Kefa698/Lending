@@ -82,7 +82,24 @@ contract Lending is ReentrancyGuard, Ownable {
         require(healthFactor(msg.sender) >= MIN_HEALH_FACTOR, "platform will go insolvent");
     }
 
-    function liquidate() external {}
+    function liquidate(
+        address account,
+        address repayToken,
+        address rewardToken
+    ) external {
+        require(healthFactor(account) < MIN_HEALH_FACTOR, "account cant be liquidated");
+        uint256 halfDebt = s_accountToTokenBorrows[account][repayToken] / 2;
+        uint256 halfDebtInEth = getEthValue(repayToken, halfDebt);
+        require(halfDebtInEth > 0, "choose a different repayToken");
+        uint256 rewardAmountInEth = (halfDebtInEth * LIQUIDATION_REWARD) / 100;
+        uint256 totalRewardAmountInRewardToken = getTokenValueFromEth(
+            rewardToken,
+            rewardAmountInEth + halfDebtInEth
+        );
+        emit Liquidate(account, repayToken, rewardToken, halfDebtInEth, msg.sender);
+        _repay(account, repayToken, halfDebt);
+        _pullFunds(account, rewardToken, totalRewardAmountInRewardToken);
+    }
 
     function repay(address token, uint256 amount)
         external
