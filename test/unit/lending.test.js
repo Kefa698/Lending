@@ -84,7 +84,7 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   ).to.be.revertedWith("TokenNotAllowed")
               })
           })
-          
+
           describe("Withdraw", function () {
               it("it pulls money", async function () {
                   await wbtc.approve(lending.address, depositAmount)
@@ -101,5 +101,8 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                       lending.withdraw(wbtc.address, depositAmount.mul(2))
                   ).to.be.revertedWith("Not enough funds")
               })
+          })
+          describe("Borrow", function () {
+              it("cant pull money out that will make the platform go insolvent", async function () {})
           })
       })
