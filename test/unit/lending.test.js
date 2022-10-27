@@ -109,6 +109,23 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   //. Setup the contract to have enough DAI to borrow
                   // Our daiBorrowAmount is set to 80% of 2000 + 1, since the threshold is 80%
                   // And this should be enought to not let us borrow this amount
+                  const daiBorrowAmount = ethers.utils.parseEther(
+                      (200 * (threshold.toNumber() / 100) + 1).toString()
+                  )
+                  const daiEthValue = await lending.getEthValue(dai.address, daiBorrowAmount)
+                  const wbtcEthValue = await lending.getEthValue(wbtc.address, depositAmount)
+                  console.log(
+                      `Going to attempt to borrow ${ethers.utils.formatEther(
+                          daiEthValue
+                      )} ETH worth of DAI (${ethers.utils.formatEther(daiBorrowAmount)} DAI)\n`
+                  )
+                  console.log(
+                      `With only ${ethers.utils.formatEther(
+                          wbtcEthValue
+                      )} ETH of WBTC (${ethers.utils.formatEther(
+                          depositAmount
+                      )} WBTC) deposited. \n`
+                  )
               })
           })
       })
