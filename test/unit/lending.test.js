@@ -103,6 +103,12 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
               })
           })
           describe("Borrow", function () {
-              it("cant pull money out that will make the platform go insolvent", async function () {})
+              it("cant pull money out that will make the platform go insolvent", async function () {
+                  await wbtc.approve(lending.address, depositAmount)
+                  await lending.deposit(dai.address, depositAmount)
+                  //. Setup the contract to have enough DAI to borrow
+                  // Our daiBorrowAmount is set to 80% of 2000 + 1, since the threshold is 80%
+                  // And this should be enought to not let us borrow this amount
+              })
           })
       })
