@@ -178,4 +178,31 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   assert.equal(healthFactor.toString(), ethers.utils.parseEther("1").toString())
               })
           })
+          describe("repay", function () {
+              it("debt drops whrn doing a repayment", async function () {
+                  await wbtc.approve(lending.address, depositAmount)
+                  await lending.deposit(wbtc.address, depositAmount)
+                  const wbtcEthValue = await lending.getEthValue(wbtc.address, depositAmount)
+                  //lep player deposit amount
+                  const daiBorrowAmount = ethers.utils.parseEther(
+                      (2000 * (threshold.toNumber() / 100)).toString()
+                  )
+                  await dai.transfer(player.address, daiBorrowAmount)
+                  const playerConnectedLending = await lending.connect(player)
+                  const playerConnectedDai = await dai.connect(player)
+                  await playerConnectedDai.approve(lending.address, daiBorrowAmount)
+                  await playerConnectedLending.deposit(dai.address, daiBorrowAmount)
+                  // Just to be safe let's connect back
+                  await dai.connect(deployer)
+                  await lending.connect(deployer)
+
+                  await lending.borrow(dai.address, daiBorrowAmount)
+                  await dai.approve(lending.address, daiBorrowAmount)
+                  await lending.repay(dai.address, daiBorrowAmount)
+                  const accountInfo = await lending.getAccountInformation(deployer.address)
+                  assert.equal(accountInfo[0].toString(), "0")
+                  assert.equal(accountInfo[1].toString(), wbtcEthValue)
+              })
+          })
+          
       })
