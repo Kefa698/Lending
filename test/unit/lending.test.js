@@ -145,5 +145,37 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                       "Platform will go insolvent!"
                   )
               })
+              it("you can borrow to the exact threshold", async function () {
+                  // This is the same test as above with one difference
+                  await wbtc.approve(lending.address, depositAmount)
+                  await lending.deposit(wbtc.address, depositAmount)
+                  // The difference is here!
+                  const daiBorrowAmount = ethers.utils.parseEther(
+                      (2000 * (threshold.toNumber() / 100)).toString()
+                  )
+                  const daiEthValue = await lending.getEthValue(dai.address, daiBorrowAmount)
+                  const wbtcEthValue = await lending.getEthValue(wbtc.address, depositAmount)
+                  await dai.transfer(player.address, daiBorrowAmount)
+                  const playerConnectedLending = await lending.connect(player)
+                  const playerConnectedDai = await dai.connect(player)
+                  await playerConnectedDai.approve(lending.address, daiBorrowAmount)
+                  await playerConnectedLending.deposit(dai.address, daiBorrowAmount)
+                  // Just to be safe let's connect back
+                  await dai.connect(deployer)
+                  await lending.connect(deployer)
+                  const playerAccount = await lending.getAccountInformation(player.address)
+                  let deployerAccount = await lending.getAccountInformation(deployer.address)
+                  assert.equal(playerAccount[0].toString(), "0")
+                  assert.equal(playerAccount[1].toString(), daiEthValue)
+                  assert.equal(deployerAccount[0].toString(), "0")
+                  assert.equal(deployerAccount[1].toString(), wbtcEthValue)
+                  // Then, let's try to borrow
+                  await lending.borrow(dai.address, daiBorrowAmount)
+                  const healthFactor = await lending.healthFactor(deployer.address)
+                  deployerAccount = await lending.getAccountInformation(deployer.address)
+                  assert.equal(deployerAccount[0].toString(), daiEthValue)
+                  assert.equal(deployerAccount[1].toString(), wbtcEthValue)
+                  assert.equal(healthFactor.toString(), ethers.utils.parseEther("1").toString())
+              })
           })
       })
