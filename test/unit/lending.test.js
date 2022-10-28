@@ -204,5 +204,112 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   assert.equal(accountInfo[1].toString(), wbtcEthValue)
               })
           })
-          
+          describe("Liquidate", function () {
+              it("Can liquidate", async function () {
+                  await wbtc.approve(lending.address, depositAmount)
+                  await lending.deposit(wbtc.address, depositAmount)
+                  // Let player deposit DAI
+                  const daiBorrowAmount = ethers.utils.parseEther(
+                      (2000 * (threshold.toNumber() / 100)).toString()
+                  )
+                  const daiEthValue = await lending.getEthValue(dai.address, daiBorrowAmount)
+
+                  await dai.transfer(player.address, daiBorrowAmount)
+                  await dai.transfer(player.address, daiBorrowAmount) // We send extra to repay later
+                  const playerConnectedLending = await lending.connect(player)
+                  const playerConnectedDai = await dai.connect(player)
+                  await playerConnectedDai.approve(lending.address, daiBorrowAmount)
+                  await playerConnectedLending.deposit(dai.address, daiBorrowAmount)
+                  // Just to be safe let's connect back
+                  await dai.connect(deployer)
+                  await lending.connect(deployer)
+                  await lending.borrow(dai.address, daiBorrowAmount)
+                  // We drop the value of our WBTC collateral to below the threshold
+                  await wbtcEthPriceFeed.updateAnswer(BTC_UPDATED_PRICE)
+                  const updatedWbtcEthValue = await lending.getEthValue(wbtc.address, depositAmount)
+                  console.log(
+                      `The value of deposits is now ${ethers.utils.formatEther(
+                          updatedWbtcEthValue
+                      )}`
+                  )
+                  console.log(
+                      `However, we have  ${ethers.utils.formatEther(daiEthValue)} DAI borrowed!`
+                  )
+                  let healthFactor = await lending.healthFactor(deployer.address)
+                  console.log(
+                      `Health factor is: ${ethers.utils.formatEther(healthFactor.toString())}`
+                  )
+                  // So the player should:
+                  // 1. Repay 50% of the loan
+                  // 2. Get 50% of the collateral + Liquidation reward % (5%)
+
+                  // Starting Collateral: 2 ETH
+                  // Starting Debt: 1.6 ETH (80% of Collateral - at the Threshold)
+
+                  // After the price update
+                  // Starting Collateral: 1.9 ETH which is 84% instead of 80%
+                  // So we repay 50% of the loan (0.8 ETH of DAI)
+                  // And can claim that amount of collateral from the user (0.8 ETH of DAI) + Liquidation reward (5% or 0.04 ETH of DAI)
+
+                  // Ending collateral should be: 1.9 ETH - 0.8 ETH (taken) - 0.04 ETH (liquidation reward) = 1.06 ETH of WBTC
+                  // Ending Debt should be: 1.6 ETH - 0.8 ETH (repayed) = 0.8 ETH of WBTC
+                  // Which is a new ratio of ~0.75 (below the 0.8 threshold)
+                  // AKA a health factor of 1.06
+                  await playerConnectedDai.approve(lending.address, daiBorrowAmount)
+                  await playerConnectedLending.liquidate(
+                      deployer.address,
+                      dai.address,
+                      wbtc.address
+                  )
+                  const endingDebt = await lending.getAccountBorrowedValue(deployer.address)
+                  const endingCollateral = await lending.getAccountCollateralValue(deployer.address)
+                  const endingHealthFactor = await lending.healthFactor(deployer.address)
+                  assert.equal(ethers.utils.formatEther(endingDebt.toString()), "0.8")
+                  assert.equal(ethers.utils.formatEther(endingHealthFactor.toString()), "1.06")
+                  console.log(
+                      `Ending Debt: ${ethers.utils.formatEther(
+                          endingDebt.toString()
+                      )} ETH \nEnding Collateral: ${ethers.utils.formatEther(
+                          endingCollateral.toString()
+                      )}ETH \nEnding HealthFactor: ${ethers.utils.formatEther(
+                          endingHealthFactor.toString()
+                      )}`
+                  )
+              })
+              it("Cant liquidate when health factor is ok and when reward or repay token is bad", async function () {
+                  await wbtc.approve(lending.address, depositAmount)
+                  await lending.deposit(wbtc.address, depositAmount)
+                  // Let player deposit DAI
+                  const daiBorrowAmount = ethers.utils.parseEther(
+                      (2000 * (threshold.toNumber() / 100)).toString()
+                  )
+                  const daiEthValue = await lending.getEthValue(dai.address, daiBorrowAmount)
+
+                  await dai.transfer(player.address, daiBorrowAmount)
+                  await dai.transfer(player.address, daiBorrowAmount) // We send extra to repay later
+                  const playerConnectedLending = await lending.connect(player)
+                  const playerConnectedDai = await dai.connect(player)
+                  const playerConnectedWbtc = await wbtc.connect(player)
+                  await playerConnectedDai.approve(lending.address, daiBorrowAmount)
+                  await playerConnectedLending.deposit(dai.address, daiBorrowAmount)
+                  // Just to be safe let's connect back
+                  await dai.connect(deployer)
+                  await lending.connect(deployer)
+                  await lending.borrow(dai.address, daiBorrowAmount)
+
+                  await playerConnectedDai.approve(lending.address, daiBorrowAmount)
+                  await expect(
+                      playerConnectedLending.liquidate(deployer.address, dai.address, wbtc.address)
+                  ).to.be.revertedWith("Account can't be liquidated!")
+                  await wbtcEthPriceFeed.updateAnswer(BTC_UPDATED_PRICE)
+                  await expect(
+                      playerConnectedLending.liquidate(deployer.address, dai.address, dai.address)
+                  ).to.be.revertedWith("Not enough funds to withdraw")
+
+                  await playerConnectedWbtc.approve(lending.address, depositAmount)
+                  await expect(
+                      playerConnectedLending.liquidate(deployer.address, wbtc.address, wbtc.address)
+                  ).to.be.revertedWith("Choose a different repayToken!")
+              })
+          })
       })
