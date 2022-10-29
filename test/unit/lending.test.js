@@ -43,11 +43,11 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
           describe("getTokenValueFromEth", function () {
               it("correctly gets Dai price", async function () {
                   // 1 DAI = $1 & ETH = $1,000
-                  const oneDaiOfEth = ethers.utils.parseEther("0.001")
+                  const oneDaiOfEth = ethers.utils.parseEther("0.002")
                   const DaiValueOfEth = await lending.getTokenValueFromEth(dai.address, oneDaiOfEth)
                   assert.equal(
                       DaiValueOfEth.toString(),
-                      await ethers.utils.parseEther("1").toString()
+                      await ethers.utils.parseEther("2").toString()
                   )
               })
               it("correctly gets wbtc price", async function () {
@@ -239,7 +239,7 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   console.log(
                       `Health factor is: ${ethers.utils.formatEther(healthFactor.toString())}`
                   )
-                  // So the player should:
+                   // So the player should:
                   // 1. Repay 50% of the loan
                   // 2. Get 50% of the collateral + Liquidation reward % (5%)
 
