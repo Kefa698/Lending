@@ -19,7 +19,6 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
               wbtc = await ethers.getContract("WBTC")
               dai = await ethers.getContract("DAI")
               randomToken = await ethers.getContract("RandomToken")
-              wbtcEthPriceFeed = await ethers.getContract("WBTC")
               daiEthPriceFeed = await ethers.getContract("DAI")
               depositAmount = ethers.utils.parseEther("1")
               threshold = await lending.LIQUIDATION_THRESHOLD()
@@ -239,7 +238,7 @@ const BTC_UPDATED_PRICE = ethers.utils.parseEther("1.9")
                   console.log(
                       `Health factor is: ${ethers.utils.formatEther(healthFactor.toString())}`
                   )
-                   // So the player should:
+                  // So the player should:
                   // 1. Repay 50% of the loan
                   // 2. Get 50% of the collateral + Liquidation reward % (5%)
 
